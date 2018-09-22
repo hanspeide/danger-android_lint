@@ -24,7 +24,7 @@ module Danger
   #
   class DangerAndroidLint < Plugin
 
-    SEVERITY_LEVELS = ["Warning", "Error", "Fatal"]
+    SEVERITY_LEVELS = ['Warning', 'Error', 'Fatal']
 
     # Location of lint report file
     # If your Android lint task outputs to a different location, you can specify it here.
@@ -34,7 +34,7 @@ module Danger
     # A getter for `report_file`.
     # @return [String]
     def report_file
-      return @report_file || 'app/build/reports/lint/lint-result.xml'
+      @report_file || 'app/build/reports/lint/lint-result.xml'
     end
 
     # Custom gradle task to run.
@@ -57,6 +57,14 @@ module Danger
     # Skip gradle task
     attr_accessor :skip_gradle_task
 
+    # Define Android project root
+    attr_accessor :android_project_root
+
+    attr_accessor :module_name
+    def module_name
+      @module_name || ''
+    end
+
     # Calls lint task of your gradle project.
     # It fails if `gradlew` cannot be found inside current directory.
     # It fails if `severity` level is not a valid option.
@@ -65,7 +73,7 @@ module Danger
     #
     def lint(inline_mode: false)
       if !skip_gradle_task && !gradlew_exists?
-        fail("Could not find `gradlew` inside current directory")
+        fail('Could not find `gradlew` inside current directory')
         return
       end
 
@@ -74,11 +82,11 @@ module Danger
         return
       end
 
-      system "./gradlew #{gradle_task || 'lint'}" unless skip_gradle_task
+      system ".#{project_root}/gradlew #{gradle_task || 'lint'}" unless skip_gradle_task
 
       unless File.exists?(report_file)
         fail("Lint report not found at `#{report_file}`. "\
-          "Have you forgot to add `xmlReport true` to your `build.gradle` file?")
+          'Did you forget to add `xmlReport true` to your `build.gradle` file?')
       end
 
       issues = read_issues_from_report
@@ -112,7 +120,7 @@ module Danger
 
     def filter_issues_by_severity(issues)
       issues.select do |issue|
-        severity_index(issue.get("severity")) >= severity_index(severity)
+        severity_index(issue.get('severity')) >= severity_index(severity)
       end
     end
 
@@ -121,10 +129,10 @@ module Danger
     end
 
     def message_for_issues(issues)
-      message = ""
+      message = ''
 
       SEVERITY_LEVELS.reverse.each do |level|
-        filtered = issues.select{|issue| issue.get("severity") == level}
+        filtered = issues.select{|issue| issue.get('severity') == level}
         message << parse_results(filtered, level) unless filtered.empty?
       end
 
@@ -134,12 +142,12 @@ module Danger
     def parse_results(results, heading)
       target_files = (git.modified_files - git.deleted_files) + git.added_files
       dir = "#{Dir.pwd}/"
-      count = 0;
-      message = ""
+      count = 0
+      message = ''
 
       results.each do |r|
         location = r.xpath('location').first
-        filename = location.get('file').gsub(dir, "")
+        filename = location.get('file').gsub(dir, '')
         next unless !filtering || (target_files.include? filename)
         line = location.get('line') || 'N/A'
         reason = r.get('message')
@@ -164,20 +172,45 @@ module Danger
       target_files = (git.modified_files - git.deleted_files) + git.added_files
       dir = "#{Dir.pwd}/"
       SEVERITY_LEVELS.reverse.each do |level|
-        filtered = issues.select{|issue| issue.get("severity") == level}
+        filtered = issues.select{|issue| issue.get('severity') == level}
         next if filtered.empty?
         filtered.each do |r|
           location = r.xpath('location').first
-          filename = location.get('file').gsub(dir, "")
+          filename = location.get('file').gsub(dir, '')
           next unless !filtering || (target_files.include? filename)
-          line = (location.get('line') || "0").to_i
-          send(level === "Warning" ? "warn" : "fail", r.get('message'), file: filename, line: line)
+          line = (location.get('line') || '0').to_i
+          send((
+               if level === 'Warning'
+                 'warn'
+               else
+                 'fail'
+               end), r.get('message'), file: filename, line: line)
         end
       end
     end
 
     def gradlew_exists?
-      `ls gradlew`.strip.empty? == false
+      !`ls #{project_root_with_ending}gradlew`.strip.empty?
+    end
+
+    def project_root
+      if !android_project_root.nil?
+        android_project_root.to_s
+      else
+        ''
+      end
+    end
+
+    def project_root_with_trailing
+      !android_project_root.nil? ? "/#{android_project_root}" : ''
+    end
+
+    def project_root_with_ending
+      !android_project_root.nil? ? "#{android_project_root}/" : ''
+    end
+
+    def project_root_with_trailing_and_ending
+      !android_project_root.nil? ? "/#{android_project_root}/" : ''
     end
   end
 end
